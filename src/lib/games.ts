@@ -1,7 +1,17 @@
-import { eq, asc } from 'drizzle-orm';
+/**
+ * Provides typed, build-time data-access helpers for games and their relations.
+ */
+
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { Database } from './db';
 import { games, categories, publishers } from '../../db/schema';
 import type { Game } from '../types/game';
+
+/** Optional category and publisher constraints for game queries. */
+export interface GameFilters {
+    categoryIds?: number[];
+    publisherId?: number;
+}
 
 const gameSelection = {
     id: games.id,
@@ -50,9 +60,25 @@ function baseGamesQuery(db: Database) {
         .leftJoin(publishers, eq(games.publisherId, publishers.id));
 }
 
-/** All games ordered by title. */
-export async function getAllGames(db: Database): Promise<Game[]> {
-    const rows = await baseGamesQuery(db).orderBy(asc(games.title));
+/**
+ * Retrieves games matching the requested filters, ordered by title.
+ *
+ * @param db - The injectable Drizzle database instance to query.
+ * @param filters - Optional category and publisher constraints.
+ * @returns A promise resolving to matching games ordered by title.
+ */
+export async function getAllGames(db: Database, filters: GameFilters = {}): Promise<Game[]> {
+    const conditions = [
+        filters.categoryIds && filters.categoryIds.length > 0
+            ? inArray(games.categoryId, filters.categoryIds)
+            : undefined,
+        filters.publisherId !== undefined ? eq(games.publisherId, filters.publisherId) : undefined,
+    ].filter((condition): condition is NonNullable<typeof condition> => condition !== undefined);
+    const query = baseGamesQuery(db);
+    const rows =
+        conditions.length > 0
+            ? await query.where(and(...conditions)).orderBy(asc(games.title))
+            : await query.orderBy(asc(games.title));
     return rows.map(mapGame);
 }
 

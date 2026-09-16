@@ -1,3 +1,7 @@
+/**
+ * Covers game catalog navigation, filtering, and empty-result behavior.
+ */
+
 import { test, expect, type Response } from '@playwright/test';
 
 test.describe('Game Listing and Navigation', () => {
@@ -22,6 +26,40 @@ test.describe('Game Listing and Navigation', () => {
       await expect(gameCards.first().getByTestId('game-title')).toBeVisible();
       await expect(gameCards.first().getByTestId('game-title')).not.toBeEmpty();
     });
+  });
+
+  test('should filter games by category and publisher', async ({ page }) => {
+    await page.goto('/');
+
+    const categoryFilter = page.getByRole('checkbox', { name: 'Strategy' });
+    const publisherFilter = page.getByTestId('publisher-filter');
+
+    await test.step('Filter by a category', async () => {
+      await categoryFilter.check();
+      await expect(page).toHaveURL(/category=1/);
+      await expect(page.getByTestId('filter-status')).toHaveText('4 matching games');
+      await expect(page.locator('[data-testid="game-card"]:visible')).toHaveCount(4);
+    });
+
+    await test.step('Combine category and publisher filters', async () => {
+      await publisherFilter.selectOption({ label: 'CodeForge Studios' });
+      await expect(page).toHaveURL(/category=1.*publisher=1|publisher=1.*category=1/);
+      await expect(page.getByTestId('filter-status')).toHaveText('1 matching games');
+    });
+
+    await test.step('Clear filters', async () => {
+      await page.getByTestId('clear-filters').click();
+      await expect(page).toHaveURL('/');
+      await expect(page.getByTestId('filter-status')).toHaveText('21 games available');
+      await expect(page.getByTestId('clear-filters')).toBeDisabled();
+    });
+  });
+
+  test('should show an empty state when filters have no matches', async ({ page }) => {
+    await page.goto('/?category=99999');
+
+    await expect(page.getByTestId('filtered-empty-state')).toBeVisible();
+    await expect(page.getByTestId('filter-status')).toHaveText('0 matching games');
   });
 
   test('should navigate to correct game details page when clicking on a game', async ({ page }) => {
